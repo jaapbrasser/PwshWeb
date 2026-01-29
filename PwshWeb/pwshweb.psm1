@@ -194,7 +194,10 @@ function Get-ContentType {
 
             try {
                 $listener = New-Object System.Net.HttpListener
-                $listener.Prefixes.Add("http://+:$Port/")
+                $listener.Prefixes.Clear()
+                $listener.Prefixes.Add("http://localhost:$Port/")
+                # or:
+                # $listener.Prefixes.Add("http://127.0.0.1:$Port/")
                 $listener.Start()
 
                 # Create server info object
@@ -287,7 +290,6 @@ function Get-ContentType {
             }
             finally {
                 if ($null -ne $listener) {
-                    $listener.Stop()
                     $listener.Close()
                 }
                 Write-Verbose "[$runspaceId] PwshWeb server stopped" -Verbose:$($VerbosePreference -eq 'Continue')
