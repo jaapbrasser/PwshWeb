@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   test:
@@ -13,22 +13,29 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        pwsh-version: ['7.4', 'latest']
+        pwsh-version: ['7.4.6', '7.5.0']
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup PowerShell
-      uses: actions/setup-powershell@v1
+    - name: Install PowerShell
+      uses: PSModule/install-powershell@v1
       with:
-        powershell-version: ${{ matrix.pwsh-version }}
+        Version: ${{ matrix.pwsh-version }}
+
+    - name: Verify PowerShell Version
+      shell: pwsh
+      run: |
+        Write-Host "Using PowerShell $($PSVersionTable.PSVersion)"
+        Write-Host "OS: $([System.Environment]::OSVersion.Platform)"
 
     - name: Install Pester
       shell: pwsh
       run: |
         Install-Module -Name Pester -Force -SkipPublisherCheck -MinimumVersion 5.0
         Import-Module Pester -MinimumVersion 5.0
+        Write-Host "Pester version: $((Get-Module Pester).Version)"
 
     - name: Run Pester Tests
       shell: pwsh
@@ -37,6 +44,7 @@ jobs:
         $config.Run.Path = './Tests/PwshWeb.Tests.ps1'
         $config.TestResult.Enabled = $true
         $config.TestResult.OutputPath = 'test-results.xml'
+        $config.TestResult.OutputFormat = 'JUnitXml'
         $config.Output.Verbosity = 'Detailed'
         Invoke-Pester -Configuration $config
 
