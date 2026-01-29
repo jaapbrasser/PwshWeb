@@ -8,10 +8,10 @@ If you need a simple way to expose a directory over HTTP, inspect files via a br
 
 ## 🔨 Installation
 
-Load the module by using:
+Install the module by using:
 
 ```powershell
-Import-Module PwshWeb
+Install-Module PwshWeb
 ```
 
 ## 🚀 Overview
