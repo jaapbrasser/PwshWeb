@@ -2,7 +2,7 @@
 
 All notable changes to PwshWeb will be documented in this file.
 
-## [1.0.2] - Unreleased
+## [1.0.2] - 2026-02-18
 
 ### Changed
 - Added support for serving `index.html` and `index.htm` index files when a directory is requested
