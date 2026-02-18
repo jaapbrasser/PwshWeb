@@ -246,12 +246,32 @@ function Get-ContentType {
 
                     try {
                         if (Test-Path -Path $localPath -PathType Container) {
-                            # Generate directory listing
-                            $content = Get-DirectoryListing -Path $localPath -RequestPath $requestPath -RootPath $RootPath
-                            $buffer = [System.Text.Encoding]::UTF8.GetBytes($content)
-                            $response.ContentType = 'text/html; charset=utf-8'
-                            $response.ContentLength64 = $buffer.Length
-                            $response.OutputStream.Write($buffer, 0, $buffer.Length)
+                            # Check for index files
+                            $indexFiles = @('index.html', 'index.htm')
+                            $indexPath = $null
+                            foreach ($index in $indexFiles) {
+                                $potentialIndex = Join-Path -Path $localPath -ChildPath $index
+                                if (Test-Path -Path $potentialIndex -PathType Leaf) {
+                                    $indexPath = $potentialIndex
+                                    break
+                                }
+                            }
+                            if ($indexPath) {
+                                # Serve the index file
+                                $fileInfo = Get-Item -Path $indexPath
+                                $contentType = Get-ContentType -Extension $fileInfo.Extension
+                                $fileBytes = [System.IO.File]::ReadAllBytes($indexPath)
+                                $response.ContentType = $contentType
+                                $response.ContentLength64 = $fileBytes.Length
+                                $response.OutputStream.Write($fileBytes, 0, $fileBytes.Length)
+                            } else {
+                                # Generate directory listing
+                                $content = Get-DirectoryListing -Path $localPath -RequestPath $requestPath -RootPath $RootPath
+                                $buffer = [System.Text.Encoding]::UTF8.GetBytes($content)
+                                $response.ContentType = 'text/html; charset=utf-8'
+                                $response.ContentLength64 = $buffer.Length
+                                $response.OutputStream.Write($buffer, 0, $buffer.Length)
+                            }
                         }
                         elseif (Test-Path -Path $localPath -PathType Leaf) {
                             # Serve file
