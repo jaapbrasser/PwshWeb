@@ -160,11 +160,12 @@ Describe 'Start-PwshWeb' {
         }
 
         It 'Should generate directory listings for directories' {
-            $response = Invoke-WebRequest -Uri "http://localhost:$TestPort/" -UseBasicParsing -TimeoutSec 5
+            # '/' serves index.html when one exists, so a listing is only
+            # produced for a directory that has no index file.
+            $response = Invoke-WebRequest -Uri "http://localhost:$TestPort/subdir/" -UseBasicParsing -TimeoutSec 5
             $response.StatusCode | Should -Be 200
-            $response.Content | Should -Match 'index\.html'
-            $response.Content | Should -Match 'data\.json'
-            $response.Content | Should -Match 'subdir'
+            $response.Content | Should -Match 'Directory listing for /subdir/'
+            $response.Content | Should -Match 'sub\.txt'
         }
     }
 
@@ -239,5 +240,66 @@ Describe 'Module Structure' {
         $command = Get-Command -Name Start-PwshWeb -ErrorAction SilentlyContinue
         $command | Should -Not -BeNullOrEmpty
         $command.CommandType | Should -Be 'Function'
+    }
+}
+
+Describe 'Directory listing links' {
+    BeforeAll {
+        $ModulePath = Join-Path -Path $PSScriptRoot -ChildPath '..' | Join-Path -ChildPath 'PwshWeb' | Join-Path -ChildPath 'PwshWeb.psd1'
+        Import-Module -Name $ModulePath -Force
+
+        $ListingPort = 18775
+        $ListingSite = Join-Path -Path $TestDrive -ChildPath 'ListingSite'
+        $SubDir = Join-Path -Path $ListingSite -ChildPath 'sub'
+        $DeeperDir = Join-Path -Path $SubDir -ChildPath 'deeper'
+        New-Item -Path $DeeperDir -ItemType Directory -Force | Out-Null
+        'alpha' | Out-File -FilePath (Join-Path -Path $ListingSite -ChildPath 'a.txt') -Encoding UTF8
+        'beta' | Out-File -FilePath (Join-Path -Path $SubDir -ChildPath 'b.txt') -Encoding UTF8
+        'delta' | Out-File -FilePath (Join-Path -Path $DeeperDir -ChildPath 'd.txt') -Encoding UTF8
+
+        $script:ListingServer = Start-PwshWeb -Port $ListingPort -Path $ListingSite -AsJob
+        Start-Sleep -Seconds 2
+
+        $script:RootPage = (Invoke-WebRequest -Uri "http://localhost:$ListingPort/" -UseBasicParsing -TimeoutSec 10).Content
+        $script:SubPage = (Invoke-WebRequest -Uri "http://localhost:$ListingPort/sub/" -UseBasicParsing -TimeoutSec 10).Content
+        $script:DeeperPage = (Invoke-WebRequest -Uri "http://localhost:$ListingPort/sub/deeper/" -UseBasicParsing -TimeoutSec 10).Content
+
+        $script:DeeperHrefs = @([regex]::Matches($script:DeeperPage, "href='([^']*)'") |
+            ForEach-Object { $_.Groups[1].Value })
+    }
+
+    AfterAll {
+        if ($script:ListingServer -and $script:ListingServer.Job) {
+            Stop-Job -Job $script:ListingServer.Job -ErrorAction SilentlyContinue
+            Remove-Job -Job $script:ListingServer.Job -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'Should not offer a parent link in the root listing' {
+        $script:RootPage | Should -Not -Match '>\.\.<'
+    }
+
+    It 'Should link from a subdirectory listing back to the root' {
+        $script:SubPage | Should -Match "href='/'>\.\.<"
+    }
+
+    It 'Should link from a nested listing to its parent directory' {
+        $script:DeeperHrefs | Should -Contain '/sub/'
+    }
+
+    It 'Should not double the separator in headings' {
+        $script:SubPage | Should -Match 'Directory listing for /sub/'
+        $script:SubPage | Should -Not -Match 'Directory listing for /sub//'
+        $script:DeeperPage | Should -Not -Match 'Directory listing for /sub/deeper//'
+    }
+
+    It 'Should not double the separator in links' {
+        $script:SubPage | Should -Not -Match "href='/sub//"
+        $script:DeeperPage | Should -Not -Match "href='/sub/deeper//"
+        $script:DeeperHrefs | Should -Contain '/sub/deeper/d.txt'
+    }
+
+    It 'Should start every table row on its own line' {
+        $script:RootPage | Should -Not -Match '</tr>[ \t]*<tr>'
     }
 }
