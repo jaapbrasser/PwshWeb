@@ -216,13 +216,34 @@ Describe 'Content Type Detection' {
         $moduleContent = Get-Content -Path $ModulePath -Raw
     }
 
-    It 'Should support common MIME types' {
+    It 'Should support common and modern MIME types' {
         $moduleContent | Should -Match "\.html"
         $moduleContent | Should -Match "\.css"
         $moduleContent | Should -Match "\.js"
+        $moduleContent | Should -Match "\.mjs"
         $moduleContent | Should -Match "\.json"
+        $moduleContent | Should -Match "\.map"
         $moduleContent | Should -Match "\.png"
         $moduleContent | Should -Match "\.jpg"
+        $moduleContent | Should -Match "\.webp"
+        $moduleContent | Should -Match "\.avif"
+        $moduleContent | Should -Match "\.wasm"
+        $moduleContent | Should -Match "\.webmanifest"
+        $moduleContent | Should -Match "\.woff"
+        $moduleContent | Should -Match "\.woff2"
+        $moduleContent | Should -Match "\.ttf"
+        $moduleContent | Should -Match "\.otf"
+        $moduleContent | Should -Match "\.csv"
+        $moduleContent | Should -Match "\.ogg"
+        $moduleContent | Should -Match "\.wav"
+        $moduleContent | Should -Match "\.yaml"
+        $moduleContent | Should -Match "\.yml"
+    }
+
+    It 'Should accept -MimeType parameter on Start-PwshWeb' {
+        $command = Get-Command -Name Start-PwshWeb -ErrorAction SilentlyContinue
+        $command.Parameters.ContainsKey('MimeType') | Should -Be $true
+        $command.Parameters['MimeType'].ParameterType | Should -Be ([hashtable])
     }
 }
 
