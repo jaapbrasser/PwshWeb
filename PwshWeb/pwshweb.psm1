@@ -98,13 +98,24 @@ function Get-DirectoryListing {
     <table>
         <tr><th>Name</th><th>Size</th><th>Modified</th></tr>
 "@
+    # The here-string above ends without a newline, so the first row would
+    # otherwise be glued to the end of the header row.
+    $html += "`n"
 
-    # Parent directory link
-    if ($Path -ne $RootPath) {
-        $parentUrl = if ($RequestPath -contains '/') {
-            $RequestPath.Substring(0, $RequestPath.LastIndexOf('/'))
-        } else { '' }
-        $html += "        <tr><td><a href='/$parentUrl'>..</a></td><td>-</td><td>-</td></tr>`n"
+    # Parent directory link. The two paths are compared without their trailing
+    # separator because Join-Path appends one when it is given an empty child
+    # path, which would otherwise make the root look like a subdirectory of
+    # itself and show '..' on the root listing.
+    $normalizedPath = $Path.TrimEnd('\', '/')
+    $normalizedRoot = $RootPath.TrimEnd('\', '/')
+    if ($normalizedPath -ne $normalizedRoot) {
+        # A request path of 'sub/deeper' has to lead back to '/sub/' and a
+        # request path of 'sub' to '/'. The trailing slash keeps the parent
+        # link shaped like the directory links in the same listing.
+        $parentUrl = if ($RequestPath.Contains('/')) {
+            '/' + $RequestPath.Substring(0, $RequestPath.LastIndexOf('/')) + '/'
+        } else { '/' }
+        $html += "        <tr><td><a href='$parentUrl'>..</a></td><td>-</td><td>-</td></tr>`n"
     }
 
     # List directories first
@@ -239,7 +250,10 @@ function Get-ContentType {
 
                     $request = $context.Request
                     $response = $context.Response
-                    $requestPath = $request.Url.LocalPath.TrimStart('/')
+                    # Trim both ends: the trailing slash of a directory
+                    # request would otherwise be joined back into every link
+                    # and heading, so '/sub/' would list '/sub//b.txt'.
+                    $requestPath = $request.Url.LocalPath.Trim('/')
                     $localPath = Join-Path -Path $RootPath -ChildPath $requestPath
 
                     Write-Verbose "[$runspaceId] $($request.HttpMethod) $($request.Url)" -Verbose:$($VerbosePreference -eq 'Continue')
