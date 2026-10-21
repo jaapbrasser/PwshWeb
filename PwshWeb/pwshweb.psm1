@@ -17,6 +17,9 @@
 .PARAMETER AsJob
     Run the web server as a background job.
 
+.PARAMETER MimeType
+    A hashtable of custom MIME type mappings to merge over or override the built-in types (e.g. @{ '.wasm' = 'application/wasm' }).
+
 .PARAMETER WhatIf
     Shows what would happen if the cmdlet runs. The cmdlet is not run.
 
@@ -34,6 +37,10 @@
 .EXAMPLE
     Start-PwshWeb -Port 9000 -AsJob
     Starts a web server, servering the current dictory as a background job on port 9000.
+
+.EXAMPLE
+    Start-PwshWeb -Port 8080 -MimeType @{ '.wasm' = 'application/wasm'; '.custom' = 'text/plain' }
+    Starts a web server on port 8080 with custom MIME type overrides.
 #>
 function Start-PwshWeb {
     [CmdletBinding(SupportsShouldProcess = $true, DefaultParameterSetName = 'Default')]
@@ -54,7 +61,11 @@ function Start-PwshWeb {
         [string]$Path = (Get-Location).Path,
 
         [Parameter(ParameterSetName = 'AsJob')]
-        [switch]$AsJob
+        [switch]$AsJob,
+
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(ParameterSetName = 'AsJob')]
+        [hashtable]$MimeType = @{}
     )
 
     begin {
@@ -147,28 +158,54 @@ function Format-FileSize {
 
         $getContentTypeFunction = @'
 function Get-ContentType {
-    param([string]$Extension)
+    param(
+        [string]$Extension,
+        [hashtable]$CustomMimeTypes = @{}
+    )
     $mimeTypes = @{
-        '.html' = 'text/html'
-        '.htm'  = 'text/html'
-        '.css'  = 'text/css'
-        '.js'   = 'application/javascript'
-        '.json' = 'application/json'
-        '.xml'  = 'application/xml'
-        '.txt'  = 'text/plain'
-        '.md'   = 'text/markdown'
-        '.jpg'  = 'image/jpeg'
-        '.jpeg' = 'image/jpeg'
-        '.png'  = 'image/png'
-        '.gif'  = 'image/gif'
-        '.svg'  = 'image/svg+xml'
-        '.ico'  = 'image/x-icon'
-        '.pdf'  = 'application/pdf'
-        '.zip'  = 'application/zip'
-        '.mp3'  = 'audio/mpeg'
-        '.mp4'  = 'video/mp4'
-        '.webm' = 'video/webm'
+        '.html'        = 'text/html'
+        '.htm'         = 'text/html'
+        '.css'         = 'text/css'
+        '.js'          = 'application/javascript'
+        '.mjs'         = 'text/javascript'
+        '.json'        = 'application/json'
+        '.map'         = 'application/json'
+        '.xml'         = 'application/xml'
+        '.txt'         = 'text/plain'
+        '.md'          = 'text/markdown'
+        '.csv'         = 'text/csv'
+        '.yaml'        = 'application/yaml'
+        '.yml'         = 'application/yaml'
+        '.jpg'         = 'image/jpeg'
+        '.jpeg'        = 'image/jpeg'
+        '.png'         = 'image/png'
+        '.gif'         = 'image/gif'
+        '.webp'        = 'image/webp'
+        '.avif'        = 'image/avif'
+        '.svg'         = 'image/svg+xml'
+        '.ico'         = 'image/x-icon'
+        '.pdf'         = 'application/pdf'
+        '.zip'         = 'application/zip'
+        '.mp3'         = 'audio/mpeg'
+        '.ogg'         = 'audio/ogg'
+        '.wav'         = 'audio/wav'
+        '.mp4'         = 'video/mp4'
+        '.webm'        = 'video/webm'
+        '.wasm'        = 'application/wasm'
+        '.webmanifest' = 'application/manifest+json'
+        '.woff'        = 'font/woff'
+        '.woff2'       = 'font/woff2'
+        '.ttf'         = 'font/ttf'
+        '.otf'         = 'font/otf'
     }
+
+    if ($CustomMimeTypes) {
+        foreach ($key in $CustomMimeTypes.Keys) {
+            $normalizedKey = if ($key.StartsWith('.')) { $key.ToLower() } else { ".$($key.ToLower())" }
+            $mimeTypes[$normalizedKey] = $CustomMimeTypes[$key]
+        }
+    }
+
     $ext = $Extension.ToLower()
     if ($mimeTypes.ContainsKey($ext)) {
         return $mimeTypes[$ext]
@@ -178,7 +215,7 @@ function Get-ContentType {
 '@
 
         $scriptBlock = {
-            param($Port, $RootPath, $VerbosePreference, $GetDirectoryListingFunction, $FormatFileSizeFunction, $GetContentTypeFunction)
+            param($Port, $RootPath, $VerbosePreference, $GetDirectoryListingFunction, $FormatFileSizeFunction, $GetContentTypeFunction, $CustomMimeTypes)
 
             # Import required types inside the job
             Add-Type -AssemblyName System.Net.HttpListener -ErrorAction SilentlyContinue
@@ -259,7 +296,7 @@ function Get-ContentType {
                             if ($indexPath) {
                                 # Serve the index file
                                 $fileInfo = Get-Item -Path $indexPath
-                                $contentType = Get-ContentType -Extension $fileInfo.Extension
+                                $contentType = Get-ContentType -Extension $fileInfo.Extension -CustomMimeTypes $CustomMimeTypes
                                 $fileBytes = [System.IO.File]::ReadAllBytes($indexPath)
                                 $response.ContentType = $contentType
                                 $response.ContentLength64 = $fileBytes.Length
@@ -276,7 +313,7 @@ function Get-ContentType {
                         elseif (Test-Path -Path $localPath -PathType Leaf) {
                             # Serve file
                             $fileInfo = Get-Item -Path $localPath
-                            $contentType = Get-ContentType -Extension $fileInfo.Extension
+                            $contentType = Get-ContentType -Extension $fileInfo.Extension -CustomMimeTypes $CustomMimeTypes
                             $fileBytes = [System.IO.File]::ReadAllBytes($localPath)
                             $response.ContentType = $contentType
                             $response.ContentLength64 = $fileBytes.Length
@@ -335,7 +372,7 @@ function Get-ContentType {
                 $jobWrapper.PSTypeNames.Insert(0, 'PwshWeb.ServerJob')
             }
 
-            $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $Port, $resolvedPath, $VerbosePreference, $getDirectoryListingFunction, $formatFileSizeFunction, $getContentTypeFunction
+            $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $Port, $resolvedPath, $VerbosePreference, $getDirectoryListingFunction, $formatFileSizeFunction, $getContentTypeFunction, $MimeType
             $jobWrapper.Job = $job
 
             # Wait for the job to start and verify it's running
@@ -364,7 +401,7 @@ function Get-ContentType {
         else {
             # Run in current session
             Write-Verbose "Starting PwshWeb server in current session..."
-            & $scriptBlock -Port $Port -RootPath $resolvedPath -VerbosePreference $VerbosePreference -GetDirectoryListingFunction $getDirectoryListingFunction -FormatFileSizeFunction $formatFileSizeFunction -GetContentTypeFunction $getContentTypeFunction
+            & $scriptBlock -Port $Port -RootPath $resolvedPath -VerbosePreference $VerbosePreference -GetDirectoryListingFunction $getDirectoryListingFunction -FormatFileSizeFunction $formatFileSizeFunction -GetContentTypeFunction $getContentTypeFunction -CustomMimeTypes $MimeType
         }
     }
 }
