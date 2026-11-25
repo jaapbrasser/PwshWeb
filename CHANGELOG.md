@@ -4,6 +4,10 @@ All notable changes to PwshWeb will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added support for additional MIME types: `.wasm`, `.mjs`, `.map`, `.webmanifest`, `.webp`, `.avif`, `.woff`, `.woff2`, `.ttf`, `.otf`, `.csv`, `.ogg`, `.wav`, `.yaml`, `.yml`
+- Added `-MimeType` parameter to `Start-PwshWeb` allowing users to supply custom or override MIME type mappings via hashtable
+
 ### Fixed
 - Directory listing links now point at the directory they name
   - The root listing no longer shows a `..` row that linked back to the root itself

@@ -10,6 +10,7 @@ Starts a lightweight PowerShell web server.
 Start-PwshWeb
     [[-Port] <Int32>]
     [[-Path] <String>]
+    [-MimeType <Hashtable>]
     [-WhatIf]
     [-Confirm]
     [<CommonParameters>]
@@ -19,6 +20,7 @@ Start-PwshWeb
 Start-PwshWeb
     [[-Port] <Int32>]
     [[-Path] <String>]
+    [-MimeType <Hashtable>]
     -AsJob
     [-WhatIf]
     [-Confirm]
@@ -58,6 +60,17 @@ The directory to serve files from. Defaults to the current directory.
 | Accept wildcard characters | False |
 
 The path must exist and be a directory.
+
+### -MimeType
+
+A hashtable of custom MIME type mappings to merge over or override built-in types (e.g. `@{ '.wasm' = 'application/wasm' }`).
+
+| Type | Hashtable |
+|------|-----------|
+| Position | Named |
+| Default value | @{} |
+| Accept pipeline input | False |
+| Accept wildcard characters | False |
 
 ### -AsJob
 
